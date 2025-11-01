@@ -15,6 +15,7 @@ import { computeElementInstance, computeElementMode } from '@hsrs/lib/expr'
 import { getCache } from '@hsrs/lib/cache'
 import { cleanRuby } from '@hsrs/lib/ruby'
 import { computeDescs, isRelation } from '@hsrs/lib/props'
+import { RichText } from '../components/rich-text'
 
 interface ElementEditorProps {
   id: string
@@ -326,7 +327,7 @@ export function ElementEditor(props: ElementEditorProps) {
                     .filter((l) => typeof example[l] === 'string')
                     .map((id) => [
                       <div className={propName}>{id}</div>,
-                      <div>{cleanRuby(example[id])}</div>,
+                      <RichText value={cleanRuby(example[id])} />,
                     ])}
                 />
                 {!cache.hasProps[exampleInstance.element] && (

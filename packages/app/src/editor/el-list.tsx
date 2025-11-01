@@ -6,7 +6,7 @@ import * as styles from '../styles'
 import { Icon } from '../components/icon'
 import * as r from '../redux'
 import { uid } from '@hsrs/lib/uid'
-import { Button } from '../components/button'
+import { Button, SolidButton } from '../components/button'
 import { Selection } from '../redux/ui'
 import { Element } from '@hsrs/lib/types'
 import CodeInput from '../components/code'
@@ -49,6 +49,43 @@ export function ElementsList(props: ElementsListProps) {
     cache = r.useSelector((state) => getCache(state.deck.elements)),
     dispatch = r.useDispatch()
 
+  const siblingNames = useMemo(
+      () =>
+        allElementIds.map((id) => deck.elements[id]?.name).filter(Boolean) as string[],
+      [allElementIds, deck.elements]
+    ),
+    makeUniqueName = (base: string) => {
+      const slug = _.kebabCase(base)
+      if (!siblingNames.includes(slug)) return slug
+      let attempt = 2
+      let candidate = _.kebabCase(`${base}-${attempt}`)
+      while (siblingNames.includes(candidate)) {
+        attempt += 1
+        candidate = _.kebabCase(`${base}-${attempt}`)
+      }
+      return candidate
+    },
+    createQuickElement = (options: { virtual?: boolean; baseName: string }) => {
+      const id = uid()
+      const name = makeUniqueName(options.baseName)
+      const element: Partial<Element> = {
+        name,
+        parents: props.parentId ? [props.parentId] : [],
+        virtual: options.virtual ? true : undefined,
+      }
+      dispatch(r.actions.createElement({ id, element }))
+      dispatch(
+        r.actions.setSelection({
+          selection: [{ type: 'element', id }],
+          index: props.index + 1,
+        })
+      )
+    }
+
+  const showDeckButton = !props.parentId || !!parentElement?.virtual,
+    showQuestionButton = !relation,
+    hasQuickActions = showDeckButton || showQuestionButton
+
   return (
     <div className={elementsListWrapper}>
       <div className={sidebarListHeader}>
@@ -67,57 +104,95 @@ export function ElementsList(props: ElementsListProps) {
         </div>
         <ElListActions {...props} />
       </div>
+      {hasQuickActions && (
+        <div className={quickActionsWrapper}>
+          <div className={quickActionsText}>
+            {props.parentId
+              ? 'Add new material to this folder:'
+              : 'Start building your deck:'}
+          </div>
+          <div className={quickActionsButtons}>
+            {showDeckButton && (
+              <SolidButton onClick={() => createQuickElement({ virtual: true, baseName: 'new deck' })}>
+                <Icon name="new-folder" />
+                &nbsp;
+                {props.parentId ? 'New subfolder' : 'New deck'}
+              </SolidButton>
+            )}
+            {showQuestionButton && (
+              <SolidButton onClick={() => createQuickElement({ baseName: 'new question' })}>
+                <Icon name="plus" />
+                &nbsp;
+                {props.parentId ? 'New question' : 'New card'}
+              </SolidButton>
+            )}
+          </div>
+        </div>
+      )}
       <div className={elementsListInner}>
-        {sortedIds.map((elementId, index) => {
-          const element = deck.elements[elementId],
-            selected = !!nextSelection?.find((s) => s.id === elementId)
-          return (
-            <ElementListItem
-              key={elementId}
-              name={element.name}
-              virtual={!!element.virtual}
-              order={
-                !showVirtual
-                  ? getLearnOrder(elementId, deck, '0.0').order
-                  : getElementOrder(elementId, deck.elements)
-              }
-              selected={selected}
-              onClick={(e) => {
-                const otherSelected =
-                  e.shiftKey || e.metaKey
-                    ? (nextSelection ?? []).filter((s) => s.id !== elementId)
-                    : []
+        {!sortedIds.length ? (
+          <div className={emptyState}>
+            <div className={emptyStateTitle}>
+              {props.parentId ? 'No cards here yet' : 'No decks yet'}
+            </div>
+            <div className={emptyStateDesc}>
+              {hasQuickActions
+                ? 'Use the quick actions above to create a folder or add your first question.'
+                : 'Select an element to see its details and relationships.'}
+            </div>
+          </div>
+        ) : (
+          sortedIds.map((elementId, index) => {
+            const element = deck.elements[elementId],
+              selected = !!nextSelection?.find((s) => s.id === elementId)
+            return (
+              <ElementListItem
+                key={elementId}
+                name={element.name}
+                virtual={!!element.virtual}
+                order={
+                  !showVirtual
+                    ? getLearnOrder(elementId, deck, '0.0').order
+                    : getElementOrder(elementId, deck.elements)
+                }
+                selected={selected}
+                onClick={(e) => {
+                  const otherSelected =
+                    e.shiftKey || e.metaKey
+                      ? (nextSelection ?? []).filter((s) => s.id !== elementId)
+                      : []
 
-                const lastOther = _.last(otherSelected),
-                  lastOtherIndex = lastOther && sortedIds.indexOf(lastOther.id),
-                  rangeMin = Math.min(lastOtherIndex ?? 0, index),
-                  rangeMax = Math.max(lastOtherIndex ?? 0, index),
-                  inRange =
-                    lastOther && e.shiftKey
-                      ? sortedIds.slice(rangeMin + 1, rangeMax)
-                      : [],
-                  rangeSelected: Selection[] = inRange.map((id) => ({
-                    id: id,
-                    type: 'element',
-                  })),
-                  thisSelected: Selection[] =
-                    selected && nextSelection.length === 1
-                      ? []
-                      : [{ id: elementId, type: 'element' }]
+                  const lastOther = _.last(otherSelected),
+                    lastOtherIndex = lastOther && sortedIds.indexOf(lastOther.id),
+                    rangeMin = Math.min(lastOtherIndex ?? 0, index),
+                    rangeMax = Math.max(lastOtherIndex ?? 0, index),
+                    inRange =
+                      lastOther && e.shiftKey
+                        ? sortedIds.slice(rangeMin + 1, rangeMax)
+                        : [],
+                    rangeSelected: Selection[] = inRange.map((id) => ({
+                      id: id,
+                      type: 'element',
+                    })),
+                    thisSelected: Selection[] =
+                      selected && nextSelection.length === 1
+                        ? []
+                        : [{ id: elementId, type: 'element' }]
 
-                dispatch(
-                  r.actions.setSelection({
-                    selection: [...otherSelected, ...rangeSelected, ...thisSelected],
-                    index: props.index + 1,
-                  })
-                )
-                e.preventDefault()
-                e.stopPropagation()
-                window.getSelection()?.removeAllRanges()
-              }}
-            />
-          )
-        })}
+                  dispatch(
+                    r.actions.setSelection({
+                      selection: [...otherSelected, ...rangeSelected, ...thisSelected],
+                      index: props.index + 1,
+                    })
+                  )
+                  e.preventDefault()
+                  e.stopPropagation()
+                  window.getSelection()?.removeAllRanges()
+                }}
+              />
+            )
+          })
+        )}
       </div>
     </div>
   )
@@ -162,6 +237,59 @@ const elementsListInner = cx(css`
   display: flex;
   flex-direction: column;
 `)
+
+const quickActionsWrapper = cx(
+  styles.surfaceTone,
+  css`
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid ${styles.color(0.93)};
+  `
+)
+
+const quickActionsText = cx(
+  css`
+    font-size: 0.85em;
+    color: ${styles.color(0.6)};
+  `
+)
+
+const quickActionsButtons = cx(
+  css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  `
+)
+
+const emptyState = cx(
+  css`
+    padding: 32px 16px;
+    text-align: center;
+    color: ${styles.color(0.65)};
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  `
+)
+
+const emptyStateTitle = cx(
+  css`
+    font-weight: 600;
+    color: ${styles.color(0.5)};
+  `
+)
+
+const emptyStateDesc = cx(
+  css`
+    font-size: 0.85em;
+    line-height: 1.4;
+    margin: 0 auto;
+    max-width: 260px;
+  `
+)
 
 interface ElementListItemProps {
   name: string
