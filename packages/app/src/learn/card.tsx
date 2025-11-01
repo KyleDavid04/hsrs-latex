@@ -13,8 +13,9 @@ import { Icon } from '../components/icon'
 import { findAliasesAync } from '@hsrs/lib/async'
 import * as t from '@hsrs/lib/types'
 import { getCache } from '@hsrs/lib/cache'
-import { cleanRuby } from '@hsrs/lib/ruby'
 import { SessionStats } from './stats'
+import { cleanRuby } from '@hsrs/lib/ruby'
+import { RichText } from '../components/rich-text'
 
 export function Card() {
   const session = r.useSelector((s) => s.deck.session),
@@ -169,9 +170,7 @@ export function Card() {
                   id[0] !== '_' &&
                   value &&
                   typeof value === 'string' && (
-                    <div key={id} className={cardValue}>
-                      {cleanRuby(value)}
-                    </div>
+                    <RichText key={id} className={cardValue} value={cleanRuby(value)} />
                   )
                 )
               })
